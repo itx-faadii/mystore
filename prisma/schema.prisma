@@ -1,0 +1,219 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  passwordHash  String?
+  role          Role      @default(CUSTOMER)
+  avatar        String?
+  phone         String?
+  addresses     Address[]
+  orders        Order[]
+  wishlist      WishlistItem[]
+  reviews       Review[]
+  chatSessions  ChatSession[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street      String
+  city        String
+  state       String
+  postalCode  String
+  country     String   @default("United States")
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  image       String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id              String         @id @default(cuid())
+  name            String
+  slug            String         @unique
+  brand           String         @default("LUMINA AURA")
+  price           Float
+  compareAtPrice  Float?
+  sku             String         @unique
+  stock           Int            @default(100)
+  rating          Float          @default(5.0)
+  reviewCount     Int            @default(0)
+  isFeatured      Boolean        @default(false)
+  isNewArrival    Boolean        @default(false)
+  isBestSeller    Boolean        @default(false)
+  isArchived      Boolean        @default(false)
+  
+  // AI Generated / Editable Content
+  description     String         @db.Text
+  benefits        String[]       // Array of bullet benefits
+  howToUse        String[]       // Step-by-step usage guide
+  ingredients     String         @db.Text
+  skinTypes       String[]       // e.g. ["All Skin Types", "Dry", "Sensitive"]
+  concerns        String[]       // e.g. ["Hydration", "Anti-aging", "Glow"]
+  
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+  
+  // Media & Variants
+  images          String[]
+  thumbnail       String
+  shades          ShadeVariant[]
+  sizes           String[]       @default(["50ml", "100ml"])
+  
+  categoryId      String
+  category        Category       @relation(fields: [categoryId], references: [id])
+  orderItems      OrderItem[]
+  wishlistItems   WishlistItem[]
+  reviews         Review[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model ShadeVariant {
+  id        String   @id @default(cuid())
+  name      String
+  hexCode   String
+  inStock   Boolean  @default(true)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id              String       @id @default(cuid())
+  orderNumber     String       @unique
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id])
+  guestEmail      String?
+  guestName       String?
+  items           OrderItem[]
+  status          OrderStatus  @default(PENDING)
+  totalAmount     Float
+  subtotal        Float
+  tax             Float        @default(0)
+  shippingCost    Float        @default(0)
+  discountAmount  Float        @default(0)
+  couponCode      String?
+  shippingAddress Json
+  paymentMethod   String       @default("CARD")
+  paymentStatus   String       @default("PAID")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float
+  shade     String?
+  size      String?
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Coupon {
+  id            String     @id @default(cuid())
+  code          String     @unique
+  description   String?
+  type          CouponType @default(PERCENTAGE)
+  value         Float      // e.g. 15 for 15%, or 10 for $10
+  minOrderValue Float      @default(0)
+  usageLimit    Int?
+  usedCount     Int        @default(0)
+  isActive      Boolean    @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime   @default(now())
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  authorName  String
+  rating      Int      @default(5)
+  title       String
+  content     String
+  images      String[]
+  isVerified  Boolean  @default(true)
+  isApproved  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model ChatSession {
+  id          String        @id @default(cuid())
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id])
+  guestId     String?
+  customerName String       @default("Guest Beauty Lover")
+  messages    ChatMessage[]
+  isResolved  Boolean       @default(false)
+  lastMessage String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ChatMessage {
+  id          String      @id @default(cuid())
+  sessionId   String
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sender      String      // "customer" | "admin" | "bot"
+  message     String
+  couponCode  String?     // Attached discount coupon if offered by admin
+  discountVal Float?
+  isRead      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+}
